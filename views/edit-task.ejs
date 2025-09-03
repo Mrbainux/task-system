@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard TaskSystem</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Dashboard TaskSystem</h1>
+    <nav>
+      <a href="/tasks/dashboard">Mes annonces</a>
+      <a href="/logout">Déconnexion</a>
+    </nav>
+  </header>
+
+  <section class="create-task">
+    <h2>Modifier votre annonce</h2>
+<h2>Modifier la tâche</h2>
+  <link rel="stylesheet" href="/css/style.css">
+<form action="/tasks/edit/<%= task._id %>" method="POST" enctype="multipart/form-data">
+  <input type="text" name="title" value="<%= task.title %>" required>
+  <textarea name="description"><%= task.description %></textarea>
+  <input type="text" name="city" value="<%= task.city %>" required>
+  <input type="text" name="phone" value="<%= task.phone %>" required>
+  <input type="number" name="price" value="<%= task.price %>">
+
+  <p>Image actuelle :</p>
+  <% if (task.image) { %>
+    <img src="/uploads/<%= task.image %>" width="150">
+  <% } %>
+
+  <p>Nouvelle image (optionnel) :</p>
+  <input type="file" name="image">
+
+  <button type="submit">Enregistrer</button>
+</form>

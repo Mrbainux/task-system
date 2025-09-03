@@ -1,0 +1,408 @@
+const fs = require('fs');
+const path = require('path');
+
+const baseDir = path.join(__dirname, 'task-system');
+
+// Fonction utilitaire pour créer un dossier si inexistant
+function mkdir(dir) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+// Fonction utilitaire pour créer un fichier
+function writeFile(filePath, content) {
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
+// Dossiers
+mkdir(baseDir);
+mkdir(path.join(baseDir, 'models'));
+mkdir(path.join(baseDir, 'routes'));
+mkdir(path.join(baseDir, 'public'));
+mkdir(path.join(baseDir, 'public/css'));
+mkdir(path.join(baseDir, 'public/uploads'));
+mkdir(path.join(baseDir, 'views'));
+
+// package.json
+writeFile(path.join(baseDir, 'package.json'), `
+{
+  "name": "task-system",
+  "version": "1.0.0",
+  "description": "Application TaskSystem Node.js + MongoDB",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "mongoose": "^7.5.0",
+    "multer": "^1.4.5"
+  }
+}
+`);
+
+// server.js
+writeFile(path.join(baseDir, 'server.js'), `
+const express = require('express');
+const path = require('path');
+const session = require('express-session');
+const mongoose = require('mongoose');
+
+const app = express();
+
+mongoose.connect('mongodb://127.0.0.1:27017/task-system', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('MongoDB connecté'))
+.catch(err => console.log('Erreur MongoDB:', err));
+
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use(session({ secret: 'secret123', resave: false, saveUninitialized: true }));
+
+app.set('view engine', 'ejs');
+
+const authRoutes = require('./routes/auth');
+const taskRoutes = require('./routes/tasks');
+app.use('/', authRoutes);
+app.use('/tasks', taskRoutes);
+
+const Task = require('./models/Task');
+app.get('/', async (req, res) => {
+  const tasks = await Task.find().sort({ createdAt: -1 });
+  res.render('index', { tasks });
+});
+
+app.listen(3000, () => console.log('Serveur démarré sur http://localhost:3000'));
+`);
+
+// models/User.js
+writeFile(path.join(baseDir, 'models/User.js'), `
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true }
+});
+
+UserSchema.pre('save', async function(next) {
+  if(!this.isModified('password')) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+module.exports = mongoose.model('User', UserSchema);
+`);
+
+// models/Task.js
+writeFile(path.join(baseDir, 'models/Task.js'), `
+const mongoose = require('mongoose');
+
+const TaskSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String },
+  category: {
+    type: String,
+    enum: [
+      'Ménage & entretien',
+      'Cours & soutien scolaire',
+      'Livraison & courses',
+      'Bricolage & réparation',
+      'Beauté & bien-être',
+      'Événementiel',
+      'Informatique & web',
+      'Autres services'
+    ],
+    default: 'Autres services'
+  },
+  city: { type: String, required: true },
+  phone: { type: String, required: true },
+  price: { type: Number },
+  home_service: { type: String },
+  contact_method: { type: String },
+  image: { type: String },
+  createdAt: { type: Date, default: Date.now },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+});
+
+module.exports = mongoose.model('Task', TaskSchema);
+`);
+
+// routes/auth.js
+writeFile(path.join(baseDir, 'routes/auth.js'), `
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs'); 
+const User = require('../models/User');
+
+function redirectIfAuth(req, res, next){
+  if(req.session.userId) return res.redirect('/tasks/dashboard');
+  next();
+}
+
+router.get('/register', redirectIfAuth, (req, res) => res.render('register'));
+router.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const user = new User({ username, password });
+    await user.save();
+    req.session.userId = user._id;
+    res.redirect('/tasks/dashboard');
+  } catch (err) {
+    console.error(err);
+    res.send('Erreur lors de l’inscription. Nom d’utilisateur peut-être déjà utilisé.');
+  }
+});
+
+router.get('/login', redirectIfAuth, (req, res) => res.render('login'));
+router.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = await User.findOne({ username });
+  if(!user) return res.send('Utilisateur non trouvé');
+  const match = await bcrypt.compare(password, user.password);
+  if(!match) return res.send('Mot de passe incorrect');
+  req.session.userId = user._id;
+  res.redirect('/tasks/dashboard');
+});
+
+router.get('/logout', (req, res) => {
+  req.session.destroy(() => res.redirect('/'));
+});
+
+module.exports = router;
+`);
+
+// routes/tasks.js
+writeFile(path.join(baseDir, 'routes/tasks.js'), `
+const express = require('express');
+const router = express.Router();
+const Task = require('../models/Task');
+const multer = require('multer');
+
+function auth(req, res, next){
+  if(!req.session.userId) return res.redirect('/login');
+  next();
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'public/uploads/'),
+  filename: (req, file, cb) => cb(null, Date.now() + '.' + file.originalname.split('.').pop())
+});
+const upload = multer({ storage });
+
+router.get('/dashboard', auth, async (req, res) => {
+  const tasks = await Task.find({ user: req.session.userId }).sort({ createdAt: -1 });
+  res.render('dashboard', { tasks });
+});
+
+router.post('/add', auth, upload.single('image'), async (req, res) => {
+  const image = req.file ? req.file.filename : null;
+  const task = new Task({ user: req.session.userId, ...req.body, image });
+  await task.save();
+  res.redirect('/tasks/dashboard');
+});
+
+router.get('/edit/:id', auth, async (req, res) => {
+  const task = await Task.findOne({ _id: req.params.id, user: req.session.userId });
+  if (!task) return res.redirect('/tasks/dashboard');
+  res.render('edit-task', { task });
+});
+
+router.post('/edit/:id', auth, upload.single('image'), async (req, res) => {
+  const updateData = { ...req.body };
+  if(req.file) updateData.image = req.file.filename;
+  await Task.findOneAndUpdate({ _id: req.params.id, user: req.session.userId }, updateData);
+  res.redirect('/tasks/dashboard');
+});
+
+router.post('/delete/:id', auth, async (req, res) => {
+  await Task.findOneAndDelete({ _id: req.params.id, user: req.session.userId });
+  res.redirect('/tasks/dashboard');
+});
+
+router.get('/search', async (req, res) => {
+  const { category, city } = req.query;
+  let filter = {};
+  if(category) filter.category = category;
+  if(city) filter.city = new RegExp(city, 'i');
+  const tasks = await Task.find(filter).sort({ createdAt: -1 });
+  res.render('index', { tasks });
+});
+
+module.exports = router;
+`);
+
+// views/index.ejs
+writeFile(path.join(baseDir, 'views/index.ejs'), `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Accueil TaskSystem</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header>
+  <h1>TaskSystem Maroc</h1>
+  <nav>
+    <a href="/register">Inscription</a>
+    <a href="/login">Login</a>
+  </nav>
+</header>
+
+<form action="/tasks/search" method="GET">
+  <label>Catégorie:</label>
+  <select name="category">
+    <option value="">Toutes</option>
+    <option value="Ménage & entretien">Ménage & entretien</option>
+    <option value="Cours & soutien scolaire">Cours & soutien scolaire</option>
+    <option value="Livraison & courses">Livraison & courses</option>
+    <option value="Bricolage & réparation">Bricolage & réparation</option>
+    <option value="Beauté & bien-être">Beauté & bien-être</option>
+    <option value="Événementiel">Événementiel</option>
+    <option value="Informatique & web">Informatique & web</option>
+    <option value="Autres services">Autres services</option>
+  </select>
+  <label>Ville / Quartier:</label>
+  <input type="text" name="city" placeholder="Ex: Casablanca">
+  <button>Rechercher</button>
+</form>
+
+<ul>
+<% tasks.forEach(task => { %>
+  <li>
+    <strong><%= task.title %></strong> - <span class="category"><%= task.category %></span>
+    <p><%= task.description %></p>
+    <div class="details">Ville: <%= task.city %> | Téléphone: <%= task.phone %></div>
+    <% if(task.image){ %><img src="/uploads/<%= task.image %>" width="150"><% } %>
+  </li>
+<% }) %>
+</ul>
+</body>
+</html>
+`);
+
+// views/register.ejs
+writeFile(path.join(baseDir, 'views/register.ejs'), `
+<!DOCTYPE html>
+<html>
+<head><title>Inscription</title><link rel="stylesheet" href="/css/style.css"></head>
+<body>
+<h1>Inscription</h1>
+<form action="/register" method="POST">
+  Nom: <input type="text" name="username" required>
+  Mot de passe: <input type="password" name="password" required>
+  <button>Register</button>
+</form>
+<a href="/">Retour accueil</a> | <a href="/login">Login</a>
+</body>
+</html>
+`);
+
+// views/login.ejs
+writeFile(path.join(baseDir, 'views/login.ejs'), `
+<!DOCTYPE html>
+<html>
+<head><title>Login</title><link rel="stylesheet" href="/css/style.css"></head>
+<body>
+<h1>Login</h1>
+<form action="/login" method="POST">
+  Nom: <input type="text" name="username" required>
+  Mot de passe: <input type="password" name="password" required>
+  <button>Login</button>
+</form>
+<a href="/">Retour accueil</a> | <a href="/register">Inscription</a>
+</body>
+</html>
+`);
+
+// views/dashboard.ejs (simplifié)
+writeFile(path.join(baseDir, 'views/dashboard.ejs'), `
+<!DOCTYPE html>
+<html>
+<head><title>Dashboard</title><link rel="stylesheet" href="/css/style.css"></head>
+<body>
+<header>
+<h1>Dashboard TaskSystem</h1>
+<nav>
+<a href="/tasks/dashboard">Mes annonces</a>
+<a href="/logout">Déconnexion</a>
+</nav>
+</header>
+
+<section>
+<h2>Créer une annonce</h2>
+<form action="/tasks/add" method="POST" enctype="multipart/form-data">
+  <input type="text" name="title" placeholder="Titre" required>
+  <textarea name="description" placeholder="Description"></textarea>
+  <input type="text" name="city" placeholder="Ville" required>
+  <input type="text" name="phone" placeholder="Téléphone" required>
+  <input type="number" name="price" placeholder="Prix">
+  <input type="file" name="image">
+  <button>Publier</button>
+</form>
+
+<h2>Mes annonces</h2>
+<ul>
+<% tasks.forEach(task => { %>
+<li><strong><%= task.title %></strong> | <%= task.city %>
+<form action="/tasks/delete/<%= task._id %>" method="POST"><button>Supprimer</button></form>
+<a href="/tasks/edit/<%= task._id %>">Modifier</a>
+</li>
+<% }) %>
+</ul>
+</section>
+</body>
+</html>
+`);
+
+// views/edit-task.ejs
+writeFile(path.join(baseDir, 'views/edit-task.ejs'), `
+<!DOCTYPE html>
+<html>
+<head><title>Modifier tâche</title><link rel="stylesheet" href="/css/style.css"></head>
+<body>
+<h1>Modifier tâche</h1>
+<form action="/tasks/edit/<%= task._id %>" method="POST" enctype="multipart/form-data">
+<input type="text" name="title" value="<%= task.title %>" required>
+<textarea name="description"><%= task.description %></textarea>
+<input type="text" name="city" value="<%= task.city %>" required>
+<input type="text" name="phone" value="<%= task.phone %>" required>
+<input type="number" name="price" value="<%= task.price %>">
+<p>Image actuelle :</p>
+<% if(task.image){ %><img src="/uploads/<%= task.image %>" width="150"><% } %>
+<p>Nouvelle image :</p>
+<input type="file" name="image">
+<button type="submit">Enregistrer</button>
+</form>
+</body>
+</html>
+`);
+
+// public/css/style.css
+writeFile(path.join(baseDir, 'public/css/style.css'), `
+body{font-family:Arial,sans-serif;background:#f4f4f7;margin:0;padding:0;color:#333;}
+a{text-decoration:none;color:inherit;}
+header{background:#4CAF50;color:#fff;padding:15px 30px;display:flex;justify-content:space-between;align-items:center;}
+header h1{margin:0;font-size:1.8rem;}
+header nav a{margin-left:15px;padding:8px 12px;background:#fff;color:#4CAF50;border-radius:5px;transition:.2s;}
+header nav a:hover{background:#45a049;color:#fff;}
+form{background:#fff;padding:20px;border-radius:10px;margin:20px auto;max-width:600px;box-shadow:0 4px 8px rgba(0,0,0,.1);}
+input,textarea,select,button{width:100%;padding:12px;margin-top:10px;margin-bottom:20px;border-radius:6px;border:1px solid #ccc;}
+button{background:#4CAF50;color:#fff;font-weight:bold;cursor:pointer;transition:.2s;}
+button:hover{background:#45a049;}
+ul{list-style:none;padding:0;max-width:800px;margin:0 auto;}
+li{background:#fff;margin-bottom:15px;padding:15px 20px;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.1);}
+li:hover{transform:translateY(-3px);}
+.category{display:inline-block;background:#FF9800;color:#fff;padding:5px 10px;border-radius:5px;font-size:.9rem;}
+.details{font-size:.9rem;color:#555;margin-top:5px;}
+footer{text-align:center;padding:15px;background:#f4f4f7;margin-top:40px;font-size:.9rem;color:#777;}
+input:focus,textarea:focus{border-color:#4CAF50;outline:none;}
+`);
+
+console.log('✅ Projet TaskSystem créé dans le dossier task-system !');
