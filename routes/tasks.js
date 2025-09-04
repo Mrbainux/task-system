@@ -1,67 +1,80 @@
-// server.js
-require('dotenv').config(); // charge les variables d'environnement depuis .env
-
 const express = require('express');
+const router = express.Router();
+const Task = require('../models/Task');
+const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
-const session = require('express-session');
-const mongoose = require('mongoose');
 
-// Models
-const Task = require('./models/Task');
+// Upload config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'public/uploads'),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+});
+const upload = multer({ storage });
 
-// Routes
-const authRoutes = require('./routes/auth');
-const taskRoutes = require('./routes/tasks');
-
-const app = express();
-
-// --- Configuration MongoDB ---
-const mongoUri = process.env.MONGODB_URI;
-if (!mongoUri) {
-  console.error("❌ Erreur: la variable MONGODB_URI n'est pas définie !");
-  process.exit(1);
-}
-console.log("🔗 Mongo URI:", mongoUri);
-
-mongoose.connect(mongoUri, {
-  // Les options useNewUrlParser et useUnifiedTopology sont maintenant ignorées avec Mongoose 7
-})
-.then(() => console.log('✅ MongoDB connecté'))
-.catch(err => console.error('❌ Erreur MongoDB:', err));
-
-// --- Middlewares ---
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'secret123',
-  resave: false,
-  saveUninitialized: true
-}));
-
-app.set('view engine', 'ejs');
-
-// --- Route recherche ---
-app.get('/search', async (req, res) => {
-  const { category, city } = req.query;
-  let filter = {};
-  if(category) filter.category = category;
-  if(city) filter.city = new RegExp(city, 'i');
-
-  const tasks = await Task.find(filter).sort({ createdAt: -1 });
-  res.render('index', { tasks });
+// Dashboard - afficher les tâches de l'utilisateur
+router.get('/dashboard', async (req, res) => {
+  const tasks = await Task.find({ user: req.session.userId }).sort({ createdAt: -1 });
+  res.render('dashboard', { tasks });
 });
 
-// --- Routes principales ---
-app.use('/', authRoutes);
-app.use('/tasks', taskRoutes);
-
-// --- Page d'accueil ---
-app.get('/', async (req, res) => {
-  const tasks = await Task.find().sort({ createdAt: -1 });
-  res.render('index', { tasks });
+// Ajouter une tâche
+router.post('/add', upload.single('image'), async (req, res) => {
+  try {
+    const taskData = { ...req.body, user: req.session.userId };
+    if(req.file) taskData.image = req.file.filename;
+    const task = new Task(taskData);
+    await task.save();
+    res.redirect('/tasks/dashboard');
+  } catch(err) {
+    console.error(err);
+    res.send('Erreur lors de la création de la tâche');
+  }
 });
 
-// --- Démarrage serveur ---
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`🚀 Serveur démarré sur le port ${PORT}`));
+// Modifier une tâche
+router.post('/edit/:id', upload.single('image'), async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if(!task) return res.send('Tâche introuvable');
+
+    Object.assign(task, req.body);
+
+    if(req.file){
+      // Supprimer ancienne image
+      if(task.image){
+        const oldPath = path.join(__dirname, '..', 'public', 'uploads', task.image);
+        if(fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      task.image = req.file.filename;
+    }
+
+    await task.save();
+    res.redirect('/tasks/dashboard');
+  } catch(err){
+    console.error(err);
+    res.send('Erreur lors de la modification de la tâche');
+  }
+});
+
+// Supprimer une tâche
+router.post('/delete/:id', async (req, res) => {
+  try{
+    const task = await Task.findById(req.params.id);
+    if(!task) return res.send('Tâche introuvable');
+
+    // Supprimer image si existante
+    if(task.image){
+      const imgPath = path.join(__dirname, '..', 'public', 'uploads', task.image);
+      if(fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+    }
+
+    await Task.deleteOne({ _id: req.params.id });
+    res.redirect('/tasks/dashboard');
+  } catch(err){
+    console.error(err);
+    res.send('Erreur lors de la suppression de la tâche');
+  }
+});
+
+module.exports = router;

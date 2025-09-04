@@ -1,29 +1,23 @@
-// server.js
-require('dotenv').config(); // charge les variables d'environnement depuis .env
-
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const mongoose = require('mongoose');
-const fs = require('fs'); // déplacer require fs en haut
+const fs = require('fs');
 
-// Models
 const Task = require('./models/Task');
 
-// Routes
 const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
 
 const app = express();
 
-// --- Configuration MongoDB ---
+// --- MongoDB ---
 const mongoUri = process.env.MONGODB_URI;
-if (!mongoUri) {
-  console.error("❌ Erreur: la variable MONGODB_URI n'est pas définie !");
+if(!mongoUri){
+  console.error("❌ MONGODB_URI non défini !");
   process.exit(1);
 }
-console.log("🔗 Mongo URI:", mongoUri);
-
 mongoose.connect(mongoUri)
   .then(() => console.log('✅ MongoDB connecté'))
   .catch(err => console.error('❌ Erreur MongoDB:', err));
@@ -40,7 +34,10 @@ app.use(session({
 
 app.set('view engine', 'ejs');
 
-// --- Route recherche ---
+// --- Health Check (pour Railway) ---
+app.get('/health', (req, res) => res.send('OK'));
+
+// --- Recherche ---
 app.get('/search', async (req, res) => {
   const { category, city } = req.query;
   let filter = {};
@@ -51,25 +48,16 @@ app.get('/search', async (req, res) => {
   res.render('index', { tasks });
 });
 
-// --- Routes principales ---
+// --- Routes ---
 app.use('/', authRoutes);
 app.use('/tasks', taskRoutes);
 
-// --- Page d'accueil ---
+// --- Accueil ---
 app.get('/', async (req, res) => {
   const tasks = await Task.find().sort({ createdAt: -1 });
   res.render('index', { tasks });
 });
 
-// --- Route temporaire pour lister les fichiers uploads ---
-app.get('/uploads-list', (req, res) => {
-  const uploadsDir = path.join(__dirname, 'public', 'uploads');
-  fs.readdir(uploadsDir, (err, files) => {
-    if (err) return res.send('Erreur: ' + err);
-    res.send(files); // Affiche la liste des fichiers
-  });
-});
-
-// --- Démarrage serveur ---
+// --- Lancement serveur ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`🚀 Serveur démarré sur le port ${PORT}`));
