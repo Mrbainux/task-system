@@ -1,4 +1,6 @@
 // server.js
+require('dotenv').config(); // charge les variables d'environnement depuis .env
+
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -13,28 +15,26 @@ const taskRoutes = require('./routes/tasks');
 
 const app = express();
 
-// --- Vérification de la variable d'environnement ---
+// --- Configuration MongoDB ---
 const mongoUri = process.env.MONGODB_URI;
 if (!mongoUri) {
-  console.error("Erreur: la variable MONGODB_URI n'est pas définie !");
-  process.exit(1); // stoppe le serveur si URI absent
+  console.error("❌ Erreur: la variable MONGODB_URI n'est pas définie !");
+  process.exit(1);
 }
-console.log("Mongo URI:", mongoUri);
+console.log("🔗 Mongo URI:", mongoUri);
 
-// --- Connexion MongoDB Atlas ---
 mongoose.connect(mongoUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+  // Les options useNewUrlParser et useUnifiedTopology sont maintenant ignorées avec Mongoose 7
 })
-.then(() => console.log('MongoDB connecté'))
-.catch(err => console.error('Erreur MongoDB:', err));
+.then(() => console.log('✅ MongoDB connecté'))
+.catch(err => console.error('❌ Erreur MongoDB:', err));
 
 // --- Middlewares ---
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(session({
-  secret: 'secret123',
+  secret: process.env.SESSION_SECRET || 'secret123',
   resave: false,
   saveUninitialized: true
 }));
@@ -63,5 +63,5 @@ app.get('/', async (req, res) => {
 });
 
 // --- Démarrage serveur ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`🚀 Serveur démarré sur le port ${PORT}`));
