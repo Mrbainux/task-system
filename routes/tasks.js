@@ -2,79 +2,73 @@ const express = require('express');
 const router = express.Router();
 const Task = require('../models/Task');
 const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
 
-// Upload config
+// Middleware auth
+function auth(req, res, next){
+  if(!req.session.userId) return res.redirect('/login');
+  next();
+}
+
+// Multer storage
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'public/uploads'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  destination: (req, file, cb) => cb(null, 'public/uploads/'),
+  filename: (req, file, cb) => {
+    const ext = file.originalname.split('.').pop();
+    cb(null, Date.now() + '.' + ext);
+  }
 });
 const upload = multer({ storage });
 
-// Dashboard - afficher les tâches de l'utilisateur
-router.get('/dashboard', async (req, res) => {
+// Dashboard
+router.get('/dashboard', auth, async (req, res) => {
   const tasks = await Task.find({ user: req.session.userId }).sort({ createdAt: -1 });
   res.render('dashboard', { tasks });
 });
 
 // Ajouter une tâche
-router.post('/add', upload.single('image'), async (req, res) => {
-  try {
-    const taskData = { ...req.body, user: req.session.userId };
-    if(req.file) taskData.image = req.file.filename;
-    const task = new Task(taskData);
-    await task.save();
-    res.redirect('/tasks/dashboard');
-  } catch(err) {
-    console.error(err);
-    res.send('Erreur lors de la création de la tâche');
-  }
+router.post('/add', auth, upload.single('image'), async (req, res) => {
+  const image = req.file ? req.file.filename : null;
+  const task = new Task({
+    user: req.session.userId,
+    ...req.body,
+    image
+  });
+  await task.save();
+  res.redirect('/tasks/dashboard');
 });
 
-// Modifier une tâche
-router.post('/edit/:id', upload.single('image'), async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id);
-    if(!task) return res.send('Tâche introuvable');
-
-    Object.assign(task, req.body);
-
-    if(req.file){
-      // Supprimer ancienne image
-      if(task.image){
-        const oldPath = path.join(__dirname, '..', 'public', 'uploads', task.image);
-        if(fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      task.image = req.file.filename;
-    }
-
-    await task.save();
-    res.redirect('/tasks/dashboard');
-  } catch(err){
-    console.error(err);
-    res.send('Erreur lors de la modification de la tâche');
-  }
+// Éditer tâche (GET)
+router.get('/edit/:id', auth, async (req, res) => {
+  const task = await Task.findOne({ _id: req.params.id, user: req.session.userId });
+  if (!task) return res.redirect('/tasks/dashboard');
+  res.render('edit-task', { task });
 });
 
-// Supprimer une tâche
-router.post('/delete/:id', async (req, res) => {
-  try{
-    const task = await Task.findById(req.params.id);
-    if(!task) return res.send('Tâche introuvable');
+// Éditer tâche (POST)
+router.post('/edit/:id', auth, upload.single('image'), async (req, res) => {
+  const updateData = { ...req.body };
+  if(req.file) updateData.image = req.file.filename;
+  await Task.findOneAndUpdate(
+    { _id: req.params.id, user: req.session.userId },
+    updateData
+  );
+  res.redirect('/tasks/dashboard');
+});
 
-    // Supprimer image si existante
-    if(task.image){
-      const imgPath = path.join(__dirname, '..', 'public', 'uploads', task.image);
-      if(fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-    }
+// Supprimer tâche (sans toucher aux images)
+router.post('/delete/:id', auth, async (req, res) => {
+  await Task.deleteOne({ _id: req.params.id, user: req.session.userId });
+  res.redirect('/tasks/dashboard');
+});
 
-    await Task.deleteOne({ _id: req.params.id });
-    res.redirect('/tasks/dashboard');
-  } catch(err){
-    console.error(err);
-    res.send('Erreur lors de la suppression de la tâche');
-  }
+// Rechercher tâches
+router.get('/search', async (req, res) => {
+  const { category, city } = req.query;
+  let filter = {};
+  if(category) filter.category = category;
+  if(city) filter.city = new RegExp(city, 'i');
+  const tasks = await Task.find(filter).sort({ createdAt: -1 });
+  res.render('index', { tasks });
 });
 
 module.exports = router;
