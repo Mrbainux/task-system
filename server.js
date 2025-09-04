@@ -65,14 +65,7 @@ app.get('/uploads-list', (req, res) => {
     res.send(files); // Affiche les noms des fichiers
   });
 });
-// --- Liste des fichiers uploads ---
-app.get('/uploads-list', (req, res) => {
-  const uploadsDir = path.join(__dirname, 'public', 'uploads');
-  fs.readdir(uploadsDir, (err, files) => {
-    if(err) return res.send('Erreur: ' + err);
-    res.send(files); // Affiche la liste des fichiers
-  });
-});
+
 
 // --- Lancement serveur ---
 const PORT = process.env.PORT || 8080;
