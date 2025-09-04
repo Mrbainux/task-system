@@ -15,7 +15,7 @@ const app = express();
 
 // --- Connexion MongoDB Atlas ---
 mongoose.connect(
-  process.env.MONGO_URI || 'mongodb+srv://Taskrabitt:saadsaad@cluster0.mmf7o3u.mongodb.net/task-system?retryWrites=true&w=majority',
+  process.env.MONGODB_URI || 'mongodb+srv://Taskrabitt:saadsaad@cluster0.mmf7o3u.mongodb.net/task-system?retryWrites=true&w=majority',
   {
     useNewUrlParser: true,
     useUnifiedTopology: true
