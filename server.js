@@ -5,6 +5,7 @@ const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const mongoose = require('mongoose');
+const fs = require('fs'); // déplacer require fs en haut
 
 // Models
 const Task = require('./models/Task');
@@ -23,11 +24,9 @@ if (!mongoUri) {
 }
 console.log("🔗 Mongo URI:", mongoUri);
 
-mongoose.connect(mongoUri, {
-  // Les options useNewUrlParser et useUnifiedTopology sont maintenant ignorées avec Mongoose 7
-})
-.then(() => console.log('✅ MongoDB connecté'))
-.catch(err => console.error('❌ Erreur MongoDB:', err));
+mongoose.connect(mongoUri)
+  .then(() => console.log('✅ MongoDB connecté'))
+  .catch(err => console.error('❌ Erreur MongoDB:', err));
 
 // --- Middlewares ---
 app.use(express.urlencoded({ extended: true }));
@@ -62,12 +61,7 @@ app.get('/', async (req, res) => {
   res.render('index', { tasks });
 });
 
-// --- Démarrage serveur ---
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`🚀 Serveur démarré sur le port ${PORT}`));
 // --- Route temporaire pour lister les fichiers uploads ---
-const fs = require('fs');
-
 app.get('/uploads-list', (req, res) => {
   const uploadsDir = path.join(__dirname, 'public', 'uploads');
   fs.readdir(uploadsDir, (err, files) => {
@@ -75,3 +69,7 @@ app.get('/uploads-list', (req, res) => {
     res.send(files); // Affiche la liste des fichiers
   });
 });
+
+// --- Démarrage serveur ---
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`🚀 Serveur démarré sur le port ${PORT}`));
