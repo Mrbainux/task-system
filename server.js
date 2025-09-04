@@ -13,14 +13,16 @@ const taskRoutes = require('./routes/tasks');
 
 const app = express();
 
-// --- Connexion MongoDB Atlas ---
-const mongoURI = process.env.MONGODB_URI;
-if (!mongoURI) {
-  console.error('Erreur: MONGODB_URI non définie dans les variables d’environnement.');
-  process.exit(1); // Arrête le serveur si MongoDB n’est pas configuré
+// --- Connexion MongoDB Atlas via variable d'environnement ---
+const mongoUri = process.env.MONGODB_URI;
+console.log("Mongo URI:", mongoUri); // Pour vérifier que la variable est bien prise en compte
+
+if (!mongoUri) {
+  console.error("Erreur: la variable MONGODB_URI n'est pas définie !");
+  process.exit(1);
 }
 
-mongoose.connect(mongoURI, {
+mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
@@ -61,5 +63,5 @@ app.get('/', async (req, res) => {
 });
 
 // --- Démarrage serveur ---
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
