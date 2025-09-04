@@ -13,21 +13,21 @@ const taskRoutes = require('./routes/tasks');
 
 const app = express();
 
-// --- Connexion MongoDB Atlas via variable d'environnement ---
+// --- Vérification de la variable d'environnement ---
 const mongoUri = process.env.MONGODB_URI;
-console.log("Mongo URI:", mongoUri); // Pour vérifier que la variable est bien prise en compte
-
 if (!mongoUri) {
   console.error("Erreur: la variable MONGODB_URI n'est pas définie !");
-  process.exit(1);
+  process.exit(1); // stoppe le serveur si URI absent
 }
+console.log("Mongo URI:", mongoUri);
 
+// --- Connexion MongoDB Atlas ---
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
 .then(() => console.log('MongoDB connecté'))
-.catch(err => console.log('Erreur MongoDB:', err));
+.catch(err => console.error('Erreur MongoDB:', err));
 
 // --- Middlewares ---
 app.use(express.urlencoded({ extended: true }));
