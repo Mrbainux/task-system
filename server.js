@@ -15,7 +15,7 @@ const app = express();
 
 // --- Connexion MongoDB Atlas ---
 mongoose.connect(
-  process.env.MONGODB_URI || 'mongodb+srv://Taskrabitt:saadsaad@cluster0.mmf7o3u.mongodb.net/task-system?retryWrites=true&w=majority&appName=Cluster0',
+  process.env.MONGO_URI || 'mongodb+srv://Taskrabitt:saadsaad@cluster0.mmf7o3u.mongodb.net/task-system?retryWrites=true&w=majority',
   {
     useNewUrlParser: true,
     useUnifiedTopology: true
@@ -59,4 +59,4 @@ app.get('/', async (req, res) => {
 
 // --- Démarrage serveur ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Serveur démarré sur http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
