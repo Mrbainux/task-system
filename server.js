@@ -78,17 +78,6 @@ app.get('/uploads-list', (req, res) => {
   });
 });
 
-// Supprimer un fichier
-app.post('/uploads-delete/:filename', (req, res) => {
-  const uploadsDir = path.join(__dirname, 'public', 'uploads');
-  const filePath = path.join(uploadsDir, req.params.filename);
-  if(fs.existsSync(filePath)){
-    fs.unlinkSync(filePath);
-    console.log(`✅ Fichier supprimé: ${req.params.filename}`);
-  }
-  res.redirect('/uploads-list');
-});
-
 
 
 // --- Lancement serveur ---
