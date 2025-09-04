@@ -65,3 +65,13 @@ app.get('/', async (req, res) => {
 // --- Démarrage serveur ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`🚀 Serveur démarré sur le port ${PORT}`));
+// --- Route temporaire pour lister les fichiers uploads ---
+const fs = require('fs');
+
+app.get('/uploads-list', (req, res) => {
+  const uploadsDir = path.join(__dirname, 'public', 'uploads');
+  fs.readdir(uploadsDir, (err, files) => {
+    if (err) return res.send('Erreur: ' + err);
+    res.send(files); // Affiche la liste des fichiers
+  });
+});
