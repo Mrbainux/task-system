@@ -7,7 +7,7 @@ const Task = require('./models/Task');
 const app = express();
 
 // --- Connexion MongoDB ---
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/task-system', {
+mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
@@ -19,12 +19,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'secret123',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: true
 }));
 
 app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views')); // IMPORTANT
 
 // --- Routes ---
 const authRoutes = require('./routes/auth');
@@ -33,6 +34,7 @@ const taskRoutes = require('./routes/tasks');
 app.use('/', authRoutes);
 app.use('/tasks', taskRoutes);
 
+// --- Page d'accueil et recherche ---
 app.get('/search', async (req, res) => {
   const { category, city } = req.query;
   let filter = {};
