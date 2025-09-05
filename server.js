@@ -1,3 +1,5 @@
+require('dotenv').config(); // Charge les variables d'environnement
+
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -25,7 +27,7 @@ app.use(session({
 }));
 
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views')); // IMPORTANT
+app.set('views', path.join(__dirname, 'views'));
 
 // --- Routes ---
 const authRoutes = require('./routes/auth');
