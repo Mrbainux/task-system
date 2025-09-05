@@ -28,6 +28,8 @@ app.use(session({
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.get('/ping', (req, res) => res.send('OK'));
+
 
 // --- Routes ---
 const authRoutes = require('./routes/auth');
